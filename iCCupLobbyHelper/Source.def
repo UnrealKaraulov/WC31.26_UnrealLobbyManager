@@ -1,0 +1,4 @@
+LIBRARY "iCCupLobbyHelper.dll"
+EXPORTS
+SetFrameDataText
+UpdatePlayerNames
