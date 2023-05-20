@@ -1,64 +1,20 @@
+#define WINDOWS_IGNORE_PACKING_MISMATCH
+#define _WIN32_WINNT 0x0501 
+#define WINVER 0x0501 
+#define NTDDI_VERSION 0x05010000
+#define WIN32_LEAN_AND_MEAN
+#define PSAPI_VERSION 1
+
 #include <Windows.h>
 #include <vector>
 #include <TlHelp32.h>
 #include <fstream>
-
+#include <filesystem>
 
 using namespace std;
 
 HANDLE LobbyWatcherId = 0;
 int GameDll = 0;
-
-
-LPVOID TlsValue;
-DWORD TlsIndex;
-DWORD _W3XTlsIndex;
-
-DWORD GetIndex()
-{
-	return *(DWORD*)(_W3XTlsIndex);
-}
-
-DWORD GetW3TlsForIndex(DWORD index)
-{
-	DWORD pid = GetCurrentProcessId();
-	THREADENTRY32 te32;
-	HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, pid);
-	te32.dwSize = sizeof(THREADENTRY32);
-
-	if (Thread32First(hSnap, &te32))
-	{
-		do
-		{
-			if (te32.th32OwnerProcessID == pid)
-			{
-				HANDLE hThread = OpenThread(THREAD_ALL_ACCESS, false, te32.th32ThreadID);
-				CONTEXT ctx = { CONTEXT_SEGMENTS };
-				LDT_ENTRY ldt;
-				GetThreadContext(hThread, &ctx);
-				GetThreadSelectorEntry(hThread, ctx.SegFs, &ldt);
-				DWORD dwThreadBase = ldt.BaseLow | (ldt.HighWord.Bytes.BaseMid <<
-					16) | (ldt.HighWord.Bytes.BaseHi << 24);
-				CloseHandle(hThread);
-				if (dwThreadBase == NULL)
-					continue;
-				DWORD* dwTLS = *(DWORD**)(dwThreadBase + 0xE10 + 4 * index);
-				if (dwTLS == NULL)
-					continue;
-				return (DWORD)dwTLS;
-			}
-		} while (Thread32Next(hSnap, &te32));
-	}
-
-	return NULL;
-}
-
-void SetTlsForMe()
-{
-	TlsIndex = GetIndex();
-	LPVOID tls = (LPVOID)GetW3TlsForIndex(TlsIndex);
-	TlsValue = tls;
-}
 
 
 BOOL NeedEject = FALSE;
@@ -88,7 +44,7 @@ public:
 		SetAllAddrs();
 		FrameAddr = 0;
 	}
-	WarcraftFramesClass(const char * framename)
+	WarcraftFramesClass(const char* framename)
 	{
 		if (!framename)
 		{
@@ -97,27 +53,27 @@ public:
 		}
 	}
 
-	WarcraftFramesClass(const char * framename, int frameid)
+	WarcraftFramesClass(const char* framename, int frameid)
 	{
 		SetAllAddrs();
 		FrameAddr = GetFrameAddress(framename, frameid);
 	}
 
-	WarcraftFramesClass(const char * framename, FRAME_TYPE FrameType)
+	WarcraftFramesClass(const char* framename, FRAME_TYPE FrameType)
 	{
 		SetAllAddrs();
 		FrameAddr = GetFrameAddress(framename, 0);
 		this->FrameType = FrameType;
 	}
 
-	WarcraftFramesClass(const char * framename, int frameid, FRAME_TYPE FrameType)
+	WarcraftFramesClass(const char* framename, int frameid, FRAME_TYPE FrameType)
 	{
 		SetAllAddrs();
 		FrameAddr = GetFrameAddress(framename, frameid);
 		this->FrameType = FrameType;
 	}
 
-	WarcraftFramesClass(const char * framename, FRAME_TYPE FrameType, int GameDll)
+	WarcraftFramesClass(const char* framename, FRAME_TYPE FrameType, int GameDll)
 	{
 		SetAllAddrs();
 		FrameAddr = GetFrameAddress(framename, 0);
@@ -125,7 +81,7 @@ public:
 		this->GameDll = GameDll;
 	}
 
-	WarcraftFramesClass(const char * framename, int frameid, FRAME_TYPE FrameType, int GameDll)
+	WarcraftFramesClass(const char* framename, int frameid, FRAME_TYPE FrameType, int GameDll)
 	{
 		SetAllAddrs();
 		FrameAddr = GetFrameAddress(framename, frameid);
@@ -162,15 +118,15 @@ public:
 		{
 		case FRAME_TEXT:
 		case FRAME_BUTTON:
-			return *(int *)(FrameAddr + 0x1EC) ? FrameAddr + 0x1EC : 0;
+			return *(int*)(FrameAddr + 0x1EC) ? FrameAddr + 0x1EC : 0;
 		case FRAME_MENU:
-			int offset = *(int *)(FrameAddr + 0x1E4);
+			int offset = *(int*)(FrameAddr + 0x1E4);
 			if (offset)
 			{
-				offset = *(int *)(offset + 0x1E4);
+				offset = *(int*)(offset + 0x1E4);
 				if (offset)
 				{
-					return *(int *)(offset + 0x1EC) ? offset + 0x1EC : 0;
+					return *(int*)(offset + 0x1EC) ? offset + 0x1EC : 0;
 				}
 			}
 			break;
@@ -190,10 +146,10 @@ public:
 		case FRAME_BUTTON:
 			return FrameAddr;
 		case FRAME_MENU:
-			int offset = *(int *)(FrameAddr + 0x1E4);
+			int offset = *(int*)(FrameAddr + 0x1E4);
 			if (offset)
 			{
-				offset = *(int *)(offset + 0x1E4);
+				offset = *(int*)(offset + 0x1E4);
 				return offset;
 			}
 			break;
@@ -201,20 +157,20 @@ public:
 		return 0;
 	}
 
-	const char * FrameGetText()
+	const char* FrameGetText()
 	{
 		int textaddr = FrameGetTextAddr();
 		if (!textaddr)
 		{
 			return NULL;
 		}
-		const char * rettext = (char *)*(int*)textaddr;
+		const char* rettext = (char*)*(int*)textaddr;
 		if (!rettext)
 			return NULL;
 		return rettext;
 	}
 
-	void WriteTextSafe(const char * text)
+	void WriteTextSafe(const char* text)
 	{
 		if (lockedframe) return;
 
@@ -224,7 +180,7 @@ public:
 			return;
 		}
 
-		if (text != NULL &&  FrameGetText() != NULL)
+		if (text != NULL && FrameGetText() != NULL)
 		{
 			if (_stricmp(text, FrameGetText()) == 0)
 				return;
@@ -234,7 +190,7 @@ public:
 
 	}
 
-	void WriteTextSafe(const char * text, int len)
+	void WriteTextSafe(const char* text, int len)
 	{
 		if (lockedframe) return;
 
@@ -244,7 +200,7 @@ public:
 			return;
 		}
 
-		if (text != NULL &&  FrameGetText() != NULL)
+		if (text != NULL && FrameGetText() != NULL)
 		{
 			if (_stricmp(text, FrameGetText()) == 0)
 				return;
@@ -264,10 +220,10 @@ public:
 		case FRAME_BUTTON:
 			return FrameAddr;
 		case FRAME_MENU:
-			int offset = *(int *)(FrameAddr + 0x1E4);
+			int offset = *(int*)(FrameAddr + 0x1E4);
 			if (offset)
 			{
-				offset = *(int *)(offset + 0x1E4);
+				offset = *(int*)(offset + 0x1E4);
 				if (offset)
 				{
 					return offset;
@@ -301,16 +257,16 @@ public:
 
 private:
 
-	typedef int(__fastcall * GetFrameAddress_p)(const char * name, int id);
+	typedef int(__fastcall* GetFrameAddress_p)(const char* name, int id);
 	GetFrameAddress_p GetFrameAddress = 0;
 
-	typedef void *(__thiscall * UpdateFrameTextSizep)(void *a1, int a2);
+	typedef void* (__thiscall* UpdateFrameTextSizep)(void* a1, int a2);
 	UpdateFrameTextSizep UpdateFrameTextSize = 0;
 
-	typedef void **(__thiscall * SetFrameText_p)(int frameaddr, const char * newtext);
+	typedef void** (__thiscall* SetFrameText_p)(int frameaddr, const char* newtext);
 	SetFrameText_p SetFrameText = 0;
 
-	typedef int(__thiscall * FreeFrameText_p)(int frameaddr, int freetype);
+	typedef int(__thiscall* FreeFrameText_p)(int frameaddr, int freetype);
 	FreeFrameText_p FreeFrameText = 0;
 
 	int GameDll = 0;
@@ -369,7 +325,7 @@ private:
 		FrameType = FRAME_UNKNOWN;
 	}
 
-	const char * hexstr = "0123456789ABCDEFabcdef";
+	const char* hexstr = "0123456789ABCDEFabcdef";
 	int hexstrlen = 0;
 
 	bool IsHex(char c)
@@ -395,12 +351,10 @@ struct SetFrameDataStruct
 	char PlayerName[100];
 };
 
-DWORD __stdcall SetFrameDataText(SetFrameDataStruct * framedatatext)
+DWORD __stdcall SetFrameDataText(SetFrameDataStruct* framedatatext)
 {
-	if (!NeedEject)
+	try
 	{
-		SetTlsForMe();
-		
 		WarcraftFramesClass tmpclass = WarcraftFramesClass(framedatatext->FrameName, framedatatext->FrameId, framedatatext->ftype);
 		WarcraftFramesClass tmpclass2 = WarcraftFramesClass("NameMenu", framedatatext->FrameId, WarcraftFramesClass::FRAME_MENU);
 		if (tmpclass.GetFrameAddr() > 0)
@@ -416,8 +370,13 @@ DWORD __stdcall SetFrameDataText(SetFrameDataStruct * framedatatext)
 
 		VirtualFree(framedatatext, sizeof(SetFrameDataStruct), MEM_RELEASE);
 	}
+	catch (...)
+	{
+
+	}
 	return 0;
 }
+
 
 struct PlayerDataStruct
 {
@@ -452,30 +411,42 @@ bool FileExist(const std::string& name) {
 	return f.good();
 }
 
-
-BOOL APIENTRY DllMain(HINSTANCE hinstDLL, DWORD reason, LPVOID)
+bool LoadSuccess = false;
+BOOL __stdcall DllMain(HINSTANCE hDLL, unsigned int r, LPVOID)
 {
-	if (reason == DLL_PROCESS_ATTACH)
+	if (r == DLL_PROCESS_ATTACH)
 	{
 		GameDll = (int)GetModuleHandle("Game.dll");
-		_W3XTlsIndex = 0xAB7BF4 + GameDll;
-
-
-		if (FileExist("printplayerinfo.txt"))
+		if (!GetModuleHandleA("Game.dll"))
 		{
-			FILE * f;
-			fopen_s(&f, "printplayerinfo.txt", "w");
-			fprintf(f, "%X->%X", &GlobalPlayerStruct.players, &GlobalPlayerStruct);
-			fclose(f);
+			return FALSE;
 		}
+		char fullPath[1024];
+		GetModuleFileNameA(hDLL, fullPath, 1024);
 
+		std::string detectorConfigPath = std::filesystem::path(fullPath).remove_filename().string();
+
+		if (FileExist(detectorConfigPath+"printplayerinfo.txt"))
+		{
+			FILE* f = NULL;
+			fopen_s(&f, (detectorConfigPath + "printplayerinfo.txt").c_str(), "w");
+			if (f != NULL)
+			{
+				fprintf(f, "%X->%X", (int)&GlobalPlayerStruct.players - (int)hDLL, (int)&GlobalPlayerStruct - (int)hDLL);
+				fclose(f);
+			}
+		}
+		LoadSuccess = true;
 	}
-	else if (reason == DLL_PROCESS_DETACH)
+	else if (r == DLL_PROCESS_DETACH)
 	{
-		NeedEject = TRUE;
-		Sleep(1500);
-		memset(&GlobalPlayerStruct, 0, sizeof(PlayerDataStruct));
-		
+		if (LoadSuccess)
+		{
+			NeedEject = TRUE;
+			Sleep(1500);
+			memset(&GlobalPlayerStruct, 0, sizeof(PlayerDataStruct));
+		}
 	}
+
 	return TRUE;
 }

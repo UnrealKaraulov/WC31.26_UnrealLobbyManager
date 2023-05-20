@@ -12,6 +12,8 @@ using System.Runtime.InteropServices;
 using System.IO;
 using System.Net;
 using System.Threading;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.StartPanel;
+using System.Globalization;
 
 namespace iCCupUnrealLobbyManager
 {
@@ -19,7 +21,6 @@ namespace iCCupUnrealLobbyManager
     {
         const string cachedir = ".\\cachedir";
         const string BlackListFilePath = ".\\blacklist.dat";
-        WebClient client = new WebClient();
 
         public LobbyManager()
         {
@@ -37,6 +38,7 @@ namespace iCCupUnrealLobbyManager
         struct PlayerInfoStruct
         {
             public int PTS;
+            public int KDA;
             public int WinRate;
             public int Win;
             public int Lose;
@@ -44,12 +46,12 @@ namespace iCCupUnrealLobbyManager
             public int WinStreak;
             public int CurStreak;
             public string PlayerName;
-            public string skype;
             public string flag;
             public string OldPlayerName;
             public bool Is3x3;
             public bool allokay;
             public bool allotherokay;
+            public bool banned;
             public bool needkick;
             public int FireOffset;
         }
@@ -58,7 +60,7 @@ namespace iCCupUnrealLobbyManager
         List<PlayerInfoStruct> AllPlayers = new List<PlayerInfoStruct>();
         List<string> BlackList = new List<string>();
 
-
+        public CookieContainer cookieContainer_0 = new CookieContainer();
         string GetFireUserName(string username, ref int offset)
         {
             offset++;
@@ -99,7 +101,10 @@ namespace iCCupUnrealLobbyManager
 
         void AddToBlackList(string str)
         {
-            BlackList.Add(Encoding.UTF8.GetString(Encoding.Default.GetBytes(str)));
+            if (!IfBlacklisted(str))
+            {
+                BlackList.Add(Encoding.UTF8.GetString(Encoding.Default.GetBytes(str)));
+            }
         }
 
         string BoolIs3x3(bool Is3x3)
@@ -118,6 +123,7 @@ namespace iCCupUnrealLobbyManager
 
             File.Create(FilePlayerInfoPath).Close();
             File.AppendAllText(FilePlayerInfoPath, str.PTS.ToString() + "\r\n");
+            File.AppendAllText(FilePlayerInfoPath, str.KDA.ToString() + "\r\n");
             File.AppendAllText(FilePlayerInfoPath, str.WinRate.ToString() + "\r\n");
             File.AppendAllText(FilePlayerInfoPath, str.Win.ToString() + "\r\n");
             File.AppendAllText(FilePlayerInfoPath, str.Lose.ToString() + "\r\n");
@@ -126,26 +132,70 @@ namespace iCCupUnrealLobbyManager
             File.AppendAllText(FilePlayerInfoPath, str.CurStreak.ToString() + "\r\n");
             if (str.allotherokay)
             {
-                File.AppendAllText(FilePlayerInfoPath, str.skype.ToString() + "\r\n");
                 File.AppendAllText(FilePlayerInfoPath, str.flag.ToString() + "\r\n");
             }
         }
+        string DownloadUrl(string url, ref string resuri)
+        {
+            HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
+            httpWebRequest.Method = "GET";
+            httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+            httpWebRequest.Referer = "https://iccup.com/";
+            httpWebRequest.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36";
+            httpWebRequest.CookieContainer = cookieContainer_0;
+            httpWebRequest.ContentType = "application/x-www-form-urlencoded";
+            httpWebRequest.Headers.Add("DNT", "1");
+            httpWebRequest.Headers.Add("Accept-Encoding", "gzip, deflate");
+            httpWebRequest.Headers.Add("Origin", "https://iccup.com");
+            httpWebRequest.Headers.Add("Upgrade-Insecure-Requests", "1");
+            httpWebRequest.ReadWriteTimeout = 5000;
+            httpWebRequest.Timeout = 5000;
+
+            //Thread.Sleep(100);
+            HttpWebResponse response = (HttpWebResponse)httpWebRequest.GetResponse();
+            Stream responseStream = response.GetResponseStream();
+            StreamReader streamReader = new StreamReader(responseStream);
+            string end = streamReader.ReadToEnd();
+            streamReader.Close();
+            responseStream.Close();
+            resuri = response.ResponseUri.AbsoluteUri;
+            response.Close();
+            return end;
+        }
+
 
         void FillGeneralPlayerInfo(ref PlayerInfoStruct str)
         {
-            string regex1 = @"\<div\s+class\s*=\s*\""p-body.*?\""\s+id\s*=\s*\""main-stata-" + (str.Is3x3 ? "3x3" : "5x5") + @"\"".*?i-pts\""\>\s*(-?\+?\d+).*?Leave.*?\<td\>\s*(-?\+?\d+)\s*\/\s*(-?\+?\d+)\s*\/\s*(-?\+?\d+)\s*.*?побед.*?\<td\>\s*(-?\+?\d+).*?екущий.*?\<td\>\s*(-?\+?\d+)";
-            string url1 = "http://iccup.com/dota/gamingprofile/" + Uri.EscapeUriString(str.PlayerName.ToLower()) + ".html";
+            string regex1 = @"i-pts\"">(.*?)<.*?\""k-num\"">K\s+(.*?)<.*>(\d+)\s+\/\s+(\d+)\s+\/\s+(\d+)<.*<td>(\d+)<\/td>.*<td>(-?\d+)<\/td>.*?desktop-view";
+            string url1 = "https://iccup.com/dota/gamingprofile/" + Uri.EscapeUriString(str.PlayerName.ToLower());
             string data = "";
-
-            trynow:
+            float waitcount = 1.0f;
+            str.allokay = false;
+        trynow:
             try
             {
-                data = client.DownloadString( url1 );
+                string retaddr = "";
+                data = DownloadUrl(url1, ref retaddr);
+                if (retaddr.IndexOf("wrongid") > 0)
+                {
+                    return;
+                }
+
+                if (data.IndexOf("503 Service Temporarily Unavailable") > 0)
+                {
+                    Thread.Sleep(Convert.ToInt32(new Random().Next(500, 1000) * waitcount));
+                    waitcount += 0.5f;
+
+                    if (waitcount > 2.0f)
+                    {
+                        return;
+                    }
+                    goto trynow;
+                }
             }
             catch
             {
-                Thread.Sleep( 1000 );
-                goto trynow;
+                return;
             }
             // File.WriteAllText(".\\data.txt", data);
             //  File.WriteAllText(".\\data_regex.txt", regex1);
@@ -154,67 +204,80 @@ namespace iCCupUnrealLobbyManager
 
             if (PlayerDataFromUrl.Success)
             {
-
-
+                for (int i = 1; i < 7; i++)
+                {
+                    if (PlayerDataFromUrl.Groups[i].Value.Length <= 0)
+                    {
+                        str.allokay = false;
+                        return;
+                    }
+                }
                 str.PTS = int.Parse(PlayerDataFromUrl.Groups[1].Value);
-                str.Win = int.Parse(PlayerDataFromUrl.Groups[2].Value);
-                str.Lose = int.Parse(PlayerDataFromUrl.Groups[3].Value);
-                str.Leaves = int.Parse(PlayerDataFromUrl.Groups[4].Value);
+                str.KDA = Convert.ToInt32(float.Parse(PlayerDataFromUrl.Groups[2].Value, CultureInfo.InvariantCulture) * 10);
+                str.Win = int.Parse(PlayerDataFromUrl.Groups[3].Value);
+                str.Lose = int.Parse(PlayerDataFromUrl.Groups[4].Value);
+                str.Leaves = int.Parse(PlayerDataFromUrl.Groups[5].Value);
 
 
-                str.WinStreak = int.Parse(PlayerDataFromUrl.Groups[5].Value);
-                str.CurStreak = int.Parse(PlayerDataFromUrl.Groups[6].Value);
+                str.WinStreak = int.Parse(PlayerDataFromUrl.Groups[6].Value);
+                str.CurStreak = int.Parse(PlayerDataFromUrl.Groups[7].Value);
                 if (str.Win == 0 && str.Lose == 0)
                     str.WinRate = 0;
                 else
                     str.WinRate = Convert.ToInt32(Convert.ToSingle(str.Win) / Convert.ToSingle(str.Win + str.Lose) * 100.0f);
                 str.allokay = true;
-
-
-            }
-            else
-            {
-
-
-                str.allokay = false;
             }
         }
 
 
         void FillOtherPlayerInfo(ref PlayerInfoStruct str)
         {
-
+            str.allotherokay = false;
             if (!ActivateOtherInfo.Checked)
             {
                 str.flag = string.Empty;
-                str.skype = string.Empty;
-                str.allotherokay = false;
                 return;
             }
 
-            string regex1 = @"ls-inside.*?flags\/(\w\w).*?skype\:(\w+)";
-            string regex2 = @"ls-inside.*?flags\/(\w\w)";
+            string regex1 = @"alt=\""(\w+)\""\s+class=\""user--flag\""";
 
-            string url1 = "http://iccup.com/dota/profile/view/" + str.PlayerName;
-            string data = client.DownloadString(url1);
+            string url1 = "https://iccup.com/dota/profile/view/" + str.PlayerName;
+
+            float waitcount = 1.0f;
+            string data = "";
+
+        trynow:
+            try
+            {
+                string retaddr = "";
+                data = DownloadUrl(url1, ref retaddr);
+                if (retaddr.IndexOf("wrongid") > 0)
+                {
+                    return;
+                }
+                if (data.IndexOf("503 Service Temporarily Unavailable") > 0)
+                {
+                    Thread.Sleep(Convert.ToInt32(new Random().Next(500, 1000) * waitcount));
+                    waitcount += 0.5f;
+
+                    if (waitcount > 2.0f)
+                    {
+                        return;
+                    }
+                    goto trynow;
+                }
+            }
+            catch
+            {
+                return;
+            }
+
+
             Match PlayerDataFromUrl = Regex.Match(data, regex1, RegexOptions.Singleline);
             if (PlayerDataFromUrl.Success)
             {
                 str.flag = PlayerDataFromUrl.Groups[1].Value;
-                str.skype = PlayerDataFromUrl.Groups[2].Value;
                 str.allotherokay = true;
-            }
-            else
-            {
-                PlayerDataFromUrl = Regex.Match(data, regex2, RegexOptions.Singleline);
-                if (PlayerDataFromUrl.Success)
-                {
-                    str.flag = PlayerDataFromUrl.Groups[1].Value;
-                    str.skype = string.Empty;
-                    str.allotherokay = true;
-                }
-                else
-                    str.allotherokay = false;
             }
         }
 
@@ -225,8 +288,7 @@ namespace iCCupUnrealLobbyManager
                 File.Delete(BlackListFilePath);
             }
 
-            File.WriteAllLines(BlackListFilePath, BlackList.ToArray());
-
+            File.WriteAllLines(BlackListFilePath, BlackList.ToArray(), Encoding.UTF8);
         }
 
         bool SkipUpdate = false;
@@ -241,7 +303,7 @@ namespace iCCupUnrealLobbyManager
             try
             {
                 FillGeneralPlayerInfo(ref TempPlayerInfoStruct);
-                Thread.Sleep(50);
+                Thread.Sleep(50 + (new Random().Next(0, 100)));
                 FillOtherPlayerInfo(ref TempPlayerInfoStruct);
                 Thread.Sleep(100);
                 SkipUpdate = true;
@@ -252,7 +314,6 @@ namespace iCCupUnrealLobbyManager
                 {
                     AddToBlackList(playername);
                     RefreshBlackList();
-                    return TempPlayerInfoStruct;
                 }
             }
             if (!TempPlayerInfoStruct.allokay)
@@ -266,7 +327,6 @@ namespace iCCupUnrealLobbyManager
 
             return TempPlayerInfoStruct;
         }
-
 
         void UpdatePlayerStructIfExist(PlayerInfoStruct strct)
         {
@@ -282,12 +342,11 @@ namespace iCCupUnrealLobbyManager
 
         PlayerInfoStruct LoadPlayerInfoStruct(string playername, bool Is3x3)
         {
-
             PlayerInfoStruct TempPlayerInfoStruct = new PlayerInfoStruct();
 
             if (IfBlacklisted(playername))
             {
-                TempPlayerInfoStruct.allokay = false;
+                TempPlayerInfoStruct.banned = true;
                 TempPlayerInfoStruct.PlayerName = playername;
                 TempPlayerInfoStruct.OldPlayerName = playername;
                 return TempPlayerInfoStruct;
@@ -310,16 +369,16 @@ namespace iCCupUnrealLobbyManager
             {
                 string[] PlayerInfoFileData = File.ReadAllLines(FilePlayerInfoPath);
                 TempPlayerInfoStruct.PTS = int.Parse(PlayerInfoFileData[0]);
-                TempPlayerInfoStruct.WinRate = int.Parse(PlayerInfoFileData[1]);
-                TempPlayerInfoStruct.Win = int.Parse(PlayerInfoFileData[2]);
-                TempPlayerInfoStruct.Lose = int.Parse(PlayerInfoFileData[3]);
-                TempPlayerInfoStruct.Leaves = int.Parse(PlayerInfoFileData[4]);
-                TempPlayerInfoStruct.WinStreak = int.Parse(PlayerInfoFileData[5]);
-                TempPlayerInfoStruct.CurStreak = int.Parse(PlayerInfoFileData[6]);
+                TempPlayerInfoStruct.KDA = int.Parse(PlayerInfoFileData[1]);
+                TempPlayerInfoStruct.WinRate = int.Parse(PlayerInfoFileData[2]);
+                TempPlayerInfoStruct.Win = int.Parse(PlayerInfoFileData[3]);
+                TempPlayerInfoStruct.Lose = int.Parse(PlayerInfoFileData[4]);
+                TempPlayerInfoStruct.Leaves = int.Parse(PlayerInfoFileData[5]);
+                TempPlayerInfoStruct.WinStreak = int.Parse(PlayerInfoFileData[6]);
+                TempPlayerInfoStruct.CurStreak = int.Parse(PlayerInfoFileData[7]);
                 TempPlayerInfoStruct.allokay = true;
                 if (PlayerInfoFileData.Length > 7)
                 {
-                    TempPlayerInfoStruct.skype = PlayerInfoFileData[7];
                     TempPlayerInfoStruct.flag = PlayerInfoFileData[8];
                     TempPlayerInfoStruct.allotherokay = true;
                 }
@@ -334,7 +393,6 @@ namespace iCCupUnrealLobbyManager
                     AllPlayers.Add(TempPlayerInfoStruct);
                 }
             }
-
 
             return TempPlayerInfoStruct;
         }
@@ -372,17 +430,17 @@ namespace iCCupUnrealLobbyManager
             string[] PlayerInfoFileData = File.ReadAllLines(FilePlayerInfoPath);
 
             TempPlayerInfoStruct.PTS = int.Parse(PlayerInfoFileData[0]);
-            TempPlayerInfoStruct.WinRate = int.Parse(PlayerInfoFileData[1]);
-            TempPlayerInfoStruct.Win = int.Parse(PlayerInfoFileData[2]);
-            TempPlayerInfoStruct.Lose = int.Parse(PlayerInfoFileData[3]);
-            TempPlayerInfoStruct.Leaves = int.Parse(PlayerInfoFileData[4]);
-            TempPlayerInfoStruct.WinStreak = int.Parse(PlayerInfoFileData[5]);
-            TempPlayerInfoStruct.CurStreak = int.Parse(PlayerInfoFileData[6]);
+            TempPlayerInfoStruct.KDA = int.Parse(PlayerInfoFileData[1]);
+            TempPlayerInfoStruct.WinRate = int.Parse(PlayerInfoFileData[2]);
+            TempPlayerInfoStruct.Win = int.Parse(PlayerInfoFileData[3]);
+            TempPlayerInfoStruct.Lose = int.Parse(PlayerInfoFileData[4]);
+            TempPlayerInfoStruct.Leaves = int.Parse(PlayerInfoFileData[5]);
+            TempPlayerInfoStruct.WinStreak = int.Parse(PlayerInfoFileData[6]);
+            TempPlayerInfoStruct.CurStreak = int.Parse(PlayerInfoFileData[7]);
 
             if (PlayerInfoFileData.Length > 7)
             {
-                TempPlayerInfoStruct.skype = PlayerInfoFileData[7];
-                TempPlayerInfoStruct.flag = PlayerInfoFileData[8];
+                TempPlayerInfoStruct.flag = PlayerInfoFileData[7];
                 TempPlayerInfoStruct.allotherokay = true;
             }
 
@@ -419,20 +477,17 @@ namespace iCCupUnrealLobbyManager
         string PlayerGeneralInfoString(ref PlayerInfoStruct playerinfo)
         {
             string result = string.Empty;
-            PlayerInfoStringTicks++;
             if (PlayerInfoStringTicks <= 20)
             {
-                result += "|c00FF8000PTS : [ |r|c0000FFFF" + playerinfo.PTS + "|r|c00FF8000 ] |r";
+                result += "|c00FF8000PTS : [ |r|c0000FFFF" + playerinfo.PTS + "|r|c00FF8000 ] |c0020E000KDA : [ |r|c0000FFFF" + (playerinfo.KDA/10.0f) + "|r|c0020E000 ] |r";
             }
             else if (PlayerInfoStringTicks <= 40)
             {
                 result += "|c0000FF00WinRate : [ |r" + GetColorByWinRate(playerinfo.WinRate) + playerinfo.WinRate + "|r|c0000FF00 ] |r";
-
             }
             else if (PlayerInfoStringTicks <= 60)
             {
                 result += "|c00FF8000WIN/LOOSE : [ |r|c0000FFFF" + playerinfo.Win + " / " + playerinfo.Lose + "|r|c00FF8000 ] |r";
-
             }
             else if (PlayerInfoStringTicks <= 80)
             {
@@ -440,10 +495,7 @@ namespace iCCupUnrealLobbyManager
             }
             else if (PlayerInfoStringTicks <= 100)
             {
-                if (playerinfo.allotherokay && playerinfo.skype.Length > 1)
-                    result += "|c00FF8000SKYPE: [ |r|c0000FFFF" + playerinfo.skype + "|r|c00FF8000 ] |r";
-                else
-                    result += "|c0000FF00WinRate : [ |r" + GetColorByWinRate(playerinfo.WinRate) + playerinfo.WinRate + "|r|c0000FF00 ] |r";
+                result += "|c0000FF00WinRate : [ |r" + GetColorByWinRate(playerinfo.WinRate) + playerinfo.WinRate + "|r|c0000FF00 ] |r";
             }
             else if (PlayerInfoStringTicks <= 120)
             {
@@ -461,10 +513,15 @@ namespace iCCupUnrealLobbyManager
         string PlayerOtherInfoString(PlayerInfoStruct playerinfo)
         {
             string result = string.Empty;
+
+            if (playerinfo.banned)
+            {
+                result += "|c00FF2000BANNED!!!!|r";
+            }
+
             if (playerinfo.allotherokay)
             {
-                result += "|c00FF8000FLAG:[|r|c0000FFFF" + playerinfo.flag + "|r|c00FF8000]|r";
-
+                result += "[|r|c0000FFFF" + playerinfo.flag + "|r]";
             }
             return result;
         }
@@ -474,6 +531,8 @@ namespace iCCupUnrealLobbyManager
         Syringe.Injector war3inject = null;
         ProcessMemory war3mem = null;
         bool FirstFind = true;
+
+        bool Ticked = false;
 
         string GetColorByWinRate(int WinRate)
         {
@@ -552,11 +611,6 @@ namespace iCCupUnrealLobbyManager
                         }
                     }
 
-                    war3inject.CallExport<int>("iCCupLobbyHelper.dll", "UpdatePlayerNames", 0);
-
-                    int PlayerInfoAddr = war3mem.DllImageAddress("iCCupLobbyHelper.dll") + 0x28AC0;
-                    int PlayerCount = war3mem.ReadInt(PlayerInfoAddr);
-
                     if (war3mem.DllImageAddress("iCCupLobbyHelper.dll") <= 0)
                     {
                         FirstFind = true;
@@ -564,38 +618,38 @@ namespace iCCupUnrealLobbyManager
                         continue;
                     }
 
+                    war3inject.CallExport<int>("iCCupLobbyHelper.dll", "UpdatePlayerNames", 0);
+                    // printplayerinfo.txt offset
+                    int PlayerInfoAddr = war3mem.DllImageAddress("iCCupLobbyHelper.dll") + 0x36C58;
+                    int PlayerCount = war3mem.ReadInt(PlayerInfoAddr);
+
+                    PlayerInfoStringTicks++;
 
                     for (int i = 0; i < PlayerCount; i++)
                     {
                         int PlayerNameOffset = war3mem.ReadInt(PlayerInfoAddr + 4 + 4 * i);
                         if (PlayerNameOffset < 1)
+                        {
                             continue;
+                        }
                         PlayerNameOffset = war3mem.ReadInt(PlayerNameOffset);
                         if (PlayerNameOffset < 1)
+                        {
                             continue;
+                        }
                         string PlayerName = war3mem.ReadStringWarcraft(PlayerNameOffset, 250);
 
                         PlayerName = Regex.Replace(PlayerName, @"\|c\w\w\w\w\w\w\w\w", string.Empty);
                         PlayerName = Regex.Replace(PlayerName, @"\|r", string.Empty);
 
-
                         if (PlayerName.Length == 0)
                             continue;
-                        if (IfBlacklisted(PlayerName))
-                            continue;
 
-
-                        if ( PlayerName.Length > 15 || PlayerName.Length < 2 )
+                        if (PlayerName.Length > 15 || PlayerName.Length < 2)
                         {
-                            if (!IfBlacklisted(PlayerName))
-                            {
-                                AddToBlackList(PlayerName);
-                                RefreshBlackList();
-                            }
                             continue;
                         }
 
-                        //    MessageBox.Show(PlayerName);
                         PlayerInfoStruct CurrentPlayerData = LoadPlayerInfoStruct(PlayerName, Is3x3Lobby.Checked);
 
                         if (!CurrentPlayerData.allokay)
@@ -605,8 +659,8 @@ namespace iCCupUnrealLobbyManager
                             continue;
                         }
 
-                        if (SkipUpdate)
-                            continue;
+                        //if (SkipUpdate)
+                        //    continue;
 
                         GlobalSetFrameDataStruct.FrameName = "NameMenu";
                         GlobalSetFrameDataStruct.FrameType = FRAME_TYPE.FRAME_MENU;
@@ -651,7 +705,6 @@ namespace iCCupUnrealLobbyManager
 
         private void LobbyManager_Load(object sender, EventArgs e)
         {
-            client.Encoding = Encoding.UTF8;
             if (Directory.Exists(cachedir))
             {
                 foreach (string file in Directory.GetFiles(cachedir))
@@ -722,6 +775,75 @@ namespace iCCupUnrealLobbyManager
         }
 
         private void CheckForKick_Tick(object sender, EventArgs e)
+        {
+            for (int i = 0; i < AllPlayers.Count; i++)
+            {
+
+            }
+        }
+
+        private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            switch (comboBox1.SelectedIndex)
+            {
+                case 0:
+                    CommandLineText.Text = "/ban ";
+                    break;
+                case 1:
+                    CommandLineText.Text = "/unban ";
+                    break;
+                case 2:
+                    CommandLineText.Text = "/exit";
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        private void ActivateGodMode_CheckedChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void CommandLineText_TextChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void CommandLineText_KeyUp(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                if (CommandLineText.Text.IndexOf("/ban ") >= 0)
+                {
+                    string username = CommandLineText.Text.Replace("/ban ", "");
+
+                }
+                else if (CommandLineText.Text.IndexOf("/unban ") >= 0)
+                {
+                    string username = CommandLineText.Text.Replace("/unban ", "");
+
+                }
+                else if (CommandLineText.Text.IndexOf("/exit") >= 0)
+                {
+                    Ticked = true;
+                    if (war3inject != null)
+                    {
+                        try
+                        {
+                            war3inject.EjectLibraryXXX("iCCupLobbyHelper.dll");
+                        }
+                        catch
+                        {
+
+                        }
+                    }
+                    Environment.Exit(0);
+                }
+            }
+        }
+
+        private void WinStreakMax_TextChanged(object sender, EventArgs e)
         {
 
         }
