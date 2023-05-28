@@ -21,6 +21,7 @@ namespace iCCupUnrealLobbyManager
     {
         const string cachedir = ".\\cachedir";
         const string BlackListFilePath = ".\\blacklist.dat";
+        const string BanListFilePath = ".\\banlist.dat";
 
         public LobbyManager()
         {
@@ -52,13 +53,13 @@ namespace iCCupUnrealLobbyManager
             public bool allokay;
             public bool allotherokay;
             public bool banned;
-            public bool needkick;
             public int FireOffset;
         }
 
 
         List<PlayerInfoStruct> AllPlayers = new List<PlayerInfoStruct>();
         List<string> BlackList = new List<string>();
+        List<string> BanList = new List<string>();
 
         public CookieContainer cookieContainer_0 = new CookieContainer();
         string GetFireUserName(string username, ref int offset)
@@ -104,6 +105,25 @@ namespace iCCupUnrealLobbyManager
             if (!IfBlacklisted(str))
             {
                 BlackList.Add(Encoding.UTF8.GetString(Encoding.Default.GetBytes(str)));
+            }
+        }
+
+        bool IfBanlisted(string str2)
+        {
+            foreach (string str1 in BanList)
+            {
+                string str3 = Encoding.Default.GetString(Encoding.UTF8.GetBytes(str1));
+                if (str3.ToLower() == str2.ToLower())
+                    return true;
+            }
+            return false;
+        }
+
+        void AddToBanList(string str)
+        {
+            if (!IfBanlisted(str))
+            {
+                BanList.Add(Encoding.UTF8.GetString(Encoding.Default.GetBytes(str)));
             }
         }
 
@@ -290,8 +310,16 @@ namespace iCCupUnrealLobbyManager
 
             File.WriteAllLines(BlackListFilePath, BlackList.ToArray(), Encoding.UTF8);
         }
+        void RefreshBanList()
+        {
+            if (File.Exists(BanListFilePath))
+            {
+                File.Delete(BanListFilePath);
+            }
 
-        bool SkipUpdate = false;
+            File.WriteAllLines(BanListFilePath, BanList.ToArray(), Encoding.UTF8);
+        }
+
         PlayerInfoStruct LoadPlayerInfoStructFromIccup(string playername, bool Is3x3)
         {
             PlayerInfoStruct TempPlayerInfoStruct = new PlayerInfoStruct();
@@ -305,8 +333,15 @@ namespace iCCupUnrealLobbyManager
                 FillGeneralPlayerInfo(ref TempPlayerInfoStruct);
                 Thread.Sleep(50 + (new Random().Next(0, 100)));
                 FillOtherPlayerInfo(ref TempPlayerInfoStruct);
-                Thread.Sleep(100);
-                SkipUpdate = true;
+                Thread.Sleep(10);
+                if (!TempPlayerInfoStruct.allokay)
+                {
+                    if (!IfBlacklisted(playername))
+                    {
+                        AddToBlackList(playername);
+                        RefreshBlackList();
+                    }
+                }
             }
             catch
             {
@@ -316,15 +351,6 @@ namespace iCCupUnrealLobbyManager
                     RefreshBlackList();
                 }
             }
-            if (!TempPlayerInfoStruct.allokay)
-            {
-                if (!IfBlacklisted(playername))
-                {
-                    AddToBlackList(playername);
-                    RefreshBlackList();
-                }
-            }
-
             return TempPlayerInfoStruct;
         }
 
@@ -344,9 +370,20 @@ namespace iCCupUnrealLobbyManager
         {
             PlayerInfoStruct TempPlayerInfoStruct = new PlayerInfoStruct();
 
+            if (IfBanlisted(playername))
+            {
+                TempPlayerInfoStruct.allokay = true;
+                TempPlayerInfoStruct.banned = true;
+                TempPlayerInfoStruct.allotherokay = false;
+                TempPlayerInfoStruct.PlayerName = playername;
+                TempPlayerInfoStruct.OldPlayerName = playername;
+                return TempPlayerInfoStruct;
+            }
+
             if (IfBlacklisted(playername))
             {
-                TempPlayerInfoStruct.banned = true;
+                TempPlayerInfoStruct.allokay = false;
+                TempPlayerInfoStruct.allotherokay = false;
                 TempPlayerInfoStruct.PlayerName = playername;
                 TempPlayerInfoStruct.OldPlayerName = playername;
                 return TempPlayerInfoStruct;
@@ -518,8 +555,7 @@ namespace iCCupUnrealLobbyManager
             {
                 result += "|c00FF2000BANNED!!!!|r";
             }
-
-            if (playerinfo.allotherokay)
+            else if (playerinfo.allotherokay)
             {
                 result += "[|r|c0000FFFF" + playerinfo.flag + "|r]";
             }
@@ -531,8 +567,6 @@ namespace iCCupUnrealLobbyManager
         Syringe.Injector war3inject = null;
         ProcessMemory war3mem = null;
         bool FirstFind = true;
-
-        bool Ticked = false;
 
         string GetColorByWinRate(int WinRate)
         {
@@ -550,7 +584,6 @@ namespace iCCupUnrealLobbyManager
             {
                 try
                 {
-                    SkipUpdate = false;
                     if (FirstFind)
                     {
                         if (Process.GetProcessesByName("war3").Length > 0)
@@ -559,7 +592,6 @@ namespace iCCupUnrealLobbyManager
                             if (Process.GetProcessesByName("war3").Length > 1)
                             {
                                 MessageBox.Show("NEED ONLY ONE war3.exe PROC", "DOWN DETECTED :D");
-                                Ticked = false;
                                 Thread.Sleep(2000);
                                 continue;
                             }
@@ -571,7 +603,6 @@ namespace iCCupUnrealLobbyManager
                                 if (Process.GetProcessesByName("war3").Length > 1)
                                 {
                                     MessageBox.Show("NEED ONLY ONE war3.exe PROC", "DOWN DETECTED :D");
-                                    Ticked = false;
                                     Thread.Sleep(2000);
                                     continue;
                                 }
@@ -605,7 +636,6 @@ namespace iCCupUnrealLobbyManager
                         }
                         else
                         {
-                            Ticked = false;
                             Thread.Sleep(2000);
                             continue;
                         }
@@ -659,9 +689,6 @@ namespace iCCupUnrealLobbyManager
                             continue;
                         }
 
-                        //if (SkipUpdate)
-                        //    continue;
-
                         GlobalSetFrameDataStruct.FrameName = "NameMenu";
                         GlobalSetFrameDataStruct.FrameType = FRAME_TYPE.FRAME_MENU;
                         GlobalSetFrameDataStruct.FrameId = i;
@@ -699,7 +726,7 @@ namespace iCCupUnrealLobbyManager
                 {
                     FirstFind = true;
                 }
-                Thread.Sleep(80);
+                Thread.Sleep(20);
             }
         }
 
@@ -734,6 +761,11 @@ namespace iCCupUnrealLobbyManager
                 BlackList.AddRange(File.ReadAllLines(BlackListFilePath));
             }
 
+            if (File.Exists(BanListFilePath))
+            {
+                BanList.AddRange(File.ReadAllLines(BanListFilePath));
+            }
+
 
             new Thread(DataFinder_Tick).Start();
         }
@@ -760,7 +792,6 @@ namespace iCCupUnrealLobbyManager
 
         private void LobbyManager_FormClosing(object sender, FormClosingEventArgs e)
         {
-            Ticked = true;
             if (war3inject != null)
                 try
                 {
@@ -817,16 +848,17 @@ namespace iCCupUnrealLobbyManager
                 if (CommandLineText.Text.IndexOf("/ban ") >= 0)
                 {
                     string username = CommandLineText.Text.Replace("/ban ", "");
-
+                    AddToBanList(username);
+                    RefreshBanList();
                 }
                 else if (CommandLineText.Text.IndexOf("/unban ") >= 0)
                 {
                     string username = CommandLineText.Text.Replace("/unban ", "");
-
+                    BanList.Remove(username);
+                    RefreshBanList();
                 }
                 else if (CommandLineText.Text.IndexOf("/exit") >= 0)
                 {
-                    Ticked = true;
                     if (war3inject != null)
                     {
                         try

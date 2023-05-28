@@ -340,8 +340,6 @@ private:
 
 };
 
-
-
 struct SetFrameDataStruct
 {
 	char FrameName[200];
@@ -440,12 +438,7 @@ BOOL __stdcall DllMain(HINSTANCE hDLL, unsigned int r, LPVOID)
 	}
 	else if (r == DLL_PROCESS_DETACH)
 	{
-		if (LoadSuccess)
-		{
-			NeedEject = TRUE;
-			Sleep(1500);
-			memset(&GlobalPlayerStruct, 0, sizeof(PlayerDataStruct));
-		}
+		memset(&GlobalPlayerStruct, 0, sizeof(PlayerDataStruct));
 	}
 
 	return TRUE;
