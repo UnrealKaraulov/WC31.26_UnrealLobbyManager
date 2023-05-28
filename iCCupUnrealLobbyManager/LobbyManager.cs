@@ -53,6 +53,7 @@ namespace iCCupUnrealLobbyManager
             public bool allokay;
             public bool allotherokay;
             public bool banned;
+            public string ban_reason;
             public int FireOffset;
         }
 
@@ -89,42 +90,65 @@ namespace iCCupUnrealLobbyManager
             return result;
         }
 
-        bool IfBlacklisted(string str2)
+        bool IfBlacklisted(string username)
         {
             foreach (string str1 in BlackList)
             {
                 string str3 = Encoding.Default.GetString(Encoding.UTF8.GetBytes(str1));
-                if (str3.ToLower() == str2.ToLower())
+                if (str3.ToLower() == username.ToLower())
                     return true;
             }
             return false;
         }
 
-        void AddToBlackList(string str)
+        void AddToBlackList(string username)
         {
-            if (!IfBlacklisted(str))
+            if (!IfBlacklisted(username))
             {
-                BlackList.Add(Encoding.UTF8.GetString(Encoding.Default.GetBytes(str)));
+                BlackList.Add(Encoding.UTF8.GetString(Encoding.Default.GetBytes(username)));
             }
         }
 
-        bool IfBanlisted(string str2)
+        bool IfBanlisted(string username, out string reason)
         {
             foreach (string str1 in BanList)
             {
                 string str3 = Encoding.Default.GetString(Encoding.UTF8.GetBytes(str1));
-                if (str3.ToLower() == str2.ToLower())
+                if (str3.ToLower().StartsWith((username + " ").ToLower())
+                    || (str1.Length == username.Length && str3.ToLower().StartsWith((username + " ").ToLower())))
+                {
+                    reason = str3.Remove(0, username.Length + 1);
                     return true;
+                }
             }
+            reason = "";
             return false;
         }
 
-        void AddToBanList(string str)
+        void AddToBanList(string username, string reason)
         {
-            if (!IfBanlisted(str))
+            string zeroreason;
+            if (!IfBanlisted(username, out zeroreason))
             {
-                BanList.Add(Encoding.UTF8.GetString(Encoding.Default.GetBytes(str)));
+                BanList.Add(Encoding.UTF8.GetString(Encoding.Default.GetBytes(username + " " + reason)));
             }
+        }
+        void DelFromBanList(string username)
+        {
+            List<string> outList = new List<string>();
+            foreach (string str1 in BanList)
+            {
+                string str3 = Encoding.Default.GetString(Encoding.UTF8.GetBytes(str1));
+                if (!str3.ToLower().StartsWith((username + " ").ToLower()))
+                {
+                    outList.Add(str1);
+                }
+            }
+
+            BanList = outList;
+
+            if (BanList.Count != outList.Count)
+                RefreshBanList();
         }
 
         string BoolIs3x3(bool Is3x3)
@@ -370,7 +394,7 @@ namespace iCCupUnrealLobbyManager
         {
             PlayerInfoStruct TempPlayerInfoStruct = new PlayerInfoStruct();
 
-            if (IfBanlisted(playername))
+            if (IfBanlisted(playername, out TempPlayerInfoStruct.ban_reason))
             {
                 TempPlayerInfoStruct.allokay = true;
                 TempPlayerInfoStruct.banned = true;
@@ -516,7 +540,7 @@ namespace iCCupUnrealLobbyManager
             string result = string.Empty;
             if (PlayerInfoStringTicks <= 20)
             {
-                result += "|c00FF8000PTS : [ |r|c0000FFFF" + playerinfo.PTS + "|r|c00FF8000 ] |c0020E000KDA : [ |r|c0000FFFF" + (playerinfo.KDA/10.0f) + "|r|c0020E000 ] |r";
+                result += "|c00FF8000PTS : [ |r|c0000FFFF" + playerinfo.PTS + "|r|c00FF8000 ] |c0020E000KDA : [ |r|c0000FFFF" + (playerinfo.KDA / 10.0f) + "|r|c0020E000 ] |r";
             }
             else if (PlayerInfoStringTicks <= 40)
             {
@@ -553,7 +577,34 @@ namespace iCCupUnrealLobbyManager
 
             if (playerinfo.banned)
             {
-                result += "|c00FF2000BANNED!!!!|r";
+                if (PlayerInfoStringTicks <= 20)
+                {
+                    result += "|c00FF2000BANNED!!!!|r";
+                }
+                else if (PlayerInfoStringTicks <= 40)
+                {
+                    result += "|c00FF4000"+playerinfo.ban_reason+"|r";
+                }
+                else if (PlayerInfoStringTicks <= 60)
+                {
+                    result += "|c00FF2000BANNED!!!!|r";
+                }
+                else if (PlayerInfoStringTicks <= 80)
+                {
+                    result += "|c00FF4000" + playerinfo.ban_reason + "|r";
+                }
+                else if (PlayerInfoStringTicks <= 100)
+                {
+                    result += "|c00FF2000BANNED!!!!|r";
+                }
+                else if (PlayerInfoStringTicks <= 120)
+                {
+                    result += "|c00FF4000" + playerinfo.ban_reason + "|r";
+                }
+                else
+                {
+                    result += "|c00FF2000BANNED!!!!|r";
+                }
             }
             else if (playerinfo.allotherokay)
             {
@@ -848,13 +899,15 @@ namespace iCCupUnrealLobbyManager
                 if (CommandLineText.Text.IndexOf("/ban ") >= 0)
                 {
                     string username = CommandLineText.Text.Replace("/ban ", "");
-                    AddToBanList(username);
+                    if (username.Split(" ".ToArray(), 2).Length == 1)
+                        username += " NO REASON";
+                    AddToBanList(username.Split(" ".ToArray(), 2)[0], username.Split(" ".ToArray(), 2)[1]);
                     RefreshBanList();
                 }
                 else if (CommandLineText.Text.IndexOf("/unban ") >= 0)
                 {
                     string username = CommandLineText.Text.Replace("/unban ", "");
-                    BanList.Remove(username);
+                    DelFromBanList(username);
                     RefreshBanList();
                 }
                 else if (CommandLineText.Text.IndexOf("/exit") >= 0)
