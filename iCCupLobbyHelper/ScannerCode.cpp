@@ -16,6 +16,17 @@ using namespace std;
 HANDLE LobbyWatcherId = 0;
 int GameDll = 0;
 
+int IsGame()
+{
+	if (!GameDll)
+		return 0;
+
+	unsigned char* _GameUI = (unsigned char*)(GameDll + 0x93631C);
+	unsigned char* InGame = (unsigned char*)(GameDll + 0xACE66C);
+
+	return *(unsigned char**)InGame && **(unsigned char***)InGame == _GameUI;
+}
+
 
 BOOL NeedEject = FALSE;
 
@@ -346,32 +357,33 @@ struct SetFrameDataStruct
 	int FrameId;
 	char Text[512];
 	WarcraftFramesClass::FRAME_TYPE ftype;
-	char PlayerName[100];
 };
 
 DWORD __stdcall SetFrameDataText(SetFrameDataStruct* framedatatext)
 {
-	try
+	if (!IsGame())
 	{
-		WarcraftFramesClass tmpclass = WarcraftFramesClass(framedatatext->FrameName, framedatatext->FrameId, framedatatext->ftype);
-		WarcraftFramesClass tmpclass2 = WarcraftFramesClass("NameMenu", framedatatext->FrameId, WarcraftFramesClass::FRAME_MENU);
-		if (tmpclass.GetFrameAddr() > 0)
+		try
 		{
-			if (tmpclass2.GetFrameAddr() > 0)
+			WarcraftFramesClass tmpclass = WarcraftFramesClass(framedatatext->FrameName, framedatatext->FrameId, framedatatext->ftype);
+			WarcraftFramesClass tmpclass2 = WarcraftFramesClass("NameMenu", framedatatext->FrameId, WarcraftFramesClass::FRAME_MENU);
+			if (tmpclass.GetFrameAddr() > 0)
 			{
-				if (tmpclass2.FrameGetText() != NULL && framedatatext->PlayerName != NULL)
+				if (tmpclass2.GetFrameAddr() > 0)
 				{
-					tmpclass.WriteTextSafe(framedatatext->Text);
+					if (tmpclass2.FrameGetText() != NULL)
+					{
+						tmpclass.WriteTextSafe(framedatatext->Text);
+					}
 				}
 			}
 		}
+		catch (...)
+		{
 
-		VirtualFree(framedatatext, sizeof(SetFrameDataStruct), MEM_RELEASE);
+		}
 	}
-	catch (...)
-	{
-
-	}
+	VirtualFree(framedatatext, sizeof(SetFrameDataStruct), MEM_RELEASE);
 	return 0;
 }
 
@@ -389,14 +401,18 @@ DWORD __stdcall UpdatePlayerNames(LPVOID)
 	if (!NeedEject)
 	{
 		memset(&GlobalPlayerStruct, 0, sizeof(PlayerDataStruct));
-		//16014
-		for (int i = 0; i < 15; i++)
+
+		if (!IsGame())
 		{
-			WarcraftFramesClass tmpclass = WarcraftFramesClass("NameMenu", i, WarcraftFramesClass::FRAME_MENU);
-			if (tmpclass.GetFrameAddr() > 0)
+			//16014
+			for (int i = 0; i < 15; i++)
 			{
-				GlobalPlayerStruct.players++;
-				GlobalPlayerStruct.playersdata[i] = tmpclass.FrameGetTextAddr();
+				WarcraftFramesClass tmpclass = WarcraftFramesClass("NameMenu", i, WarcraftFramesClass::FRAME_MENU);
+				if (tmpclass.GetFrameAddr() > 0)
+				{
+					GlobalPlayerStruct.players++;
+					GlobalPlayerStruct.playersdata[i] = tmpclass.FrameGetTextAddr();
+				}
 			}
 		}
 	}

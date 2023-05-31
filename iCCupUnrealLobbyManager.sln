@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.4.33403.182
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "iCCupUnrealLobbyManager", "iCCupUnrealLobbyManager\iCCupUnrealLobbyManager.csproj", "{BB0F366B-528E-4AD9-9A57-2A4E8ABB725C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnrealLobbyManager", "iCCupUnrealLobbyManager\UnrealLobbyManager.csproj", "{BB0F366B-528E-4AD9-9A57-2A4E8ABB725C}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "iCCupLobbyHelper", "iCCupLobbyHelper\iCCupLobbyHelper.vcxproj", "{2A8C77DF-AC76-44E2-80D0-119A99402B88}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UnrealLobbyHelper", "iCCupLobbyHelper\iCCupLobbyHelper.vcxproj", "{2A8C77DF-AC76-44E2-80D0-119A99402B88}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

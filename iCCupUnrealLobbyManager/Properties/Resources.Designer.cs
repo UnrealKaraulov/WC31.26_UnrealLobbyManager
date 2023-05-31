@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace iCCupUnrealLobbyManager.Properties {
+namespace UnrealLobbyManager.Properties {
     using System;
     
     
