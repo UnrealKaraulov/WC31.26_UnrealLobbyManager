@@ -515,21 +515,6 @@ namespace UnrealLobbyManager
 
         // Regex myRegex = new Regex(strRegex, RegexOptions.Singleline);
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-        struct SetFrameDataStruct
-        {
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 200)]
-            public string FrameName;
-            public int FrameId;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 512)]
-            public string Text;
-            public FRAME_TYPE FrameType;
-        }
-
-
-        SetFrameDataStruct GlobalSetFrameDataStruct = new SetFrameDataStruct();
-
-
         string PlayerGeneralInfoString(ref PlayerInfoStruct playerinfo)
         {
             string result = string.Empty;
@@ -816,17 +801,26 @@ namespace UnrealLobbyManager
                         }
                     }
 
-                    if (war3mem.DllImageAddress("UnrealLobbyHelper.res") <= 0)
+
+                    if (war3mem == null || war3mem.DllImageAddress("UnrealLobbyHelper.res") <= 0)
                     {
                         FirstFind = true;
                         Thread.Sleep(1000);
                         continue;
                     }
 
+                    int DllAddress = war3mem.DllImageAddress("UnrealLobbyHelper.res");
+                    int PlayersOffset = 0x36E60;
+                    int FrameNameOffset = 0x36EA0;
+                    int FrameTypeOffset = 0x36E5C;
+                    int FrameIdOffset = 0x36C50;
+                    int FrameTextOffset = 0x36C58;
+
                     war3inject.CallExport<int>("UnrealLobbyHelper.res", "UpdatePlayerNames", 0);
                     // printplayerinfo.txt offset
-                    int PlayerInfoAddr = war3mem.DllImageAddress("UnrealLobbyHelper.res") + 0x36C58;
+                    int PlayerInfoAddr = DllAddress + PlayersOffset;
                     int PlayerCount = war3mem.ReadInt(PlayerInfoAddr);
+
 
                     PlayerInfoStringTicks++;
                     PlayerInfoStringTicks++;
@@ -876,42 +870,58 @@ namespace UnrealLobbyManager
                             continue;
                         }
 
-                        GlobalSetFrameDataStruct.FrameName = "NameMenu";
-                        GlobalSetFrameDataStruct.FrameType = FRAME_TYPE.FRAME_MENU;
-                        GlobalSetFrameDataStruct.FrameId = i;
+                        int AddrOffset = DllAddress + FrameNameOffset;
+                        war3mem.WriteStringWarcraft(AddrOffset, "NameMenu");
+
+                        AddrOffset = DllAddress + FrameTypeOffset;
+                        war3mem.WriteInt(AddrOffset, Convert.ToInt32(FRAME_TYPE.FRAME_MENU));
+
+                        AddrOffset = DllAddress + FrameIdOffset;
+                        war3mem.WriteInt(AddrOffset, i);
+
+                        string usernamestr = "";
 
                         if (FireMode.Checked)
-                            GlobalSetFrameDataStruct.Text = GetFireUserName(PlayerName, ref CurrentPlayerData.FireOffset);
+                            usernamestr = GetFireUserName(PlayerName, ref CurrentPlayerData.FireOffset);
                         else
-                            GlobalSetFrameDataStruct.Text = GetColorByWinRate(CurrentPlayerData.WinRate) + PlayerName + "|r";
+                            usernamestr = GetColorByWinRate(CurrentPlayerData.WinRate) + PlayerName + "|r";
 
-                        CurrentPlayerData.OldPlayerName = GlobalSetFrameDataStruct.Text;
+                        AddrOffset = DllAddress + FrameTextOffset;
+                        war3mem.WriteStringWarcraft(AddrOffset, usernamestr);
 
-                        string usernamestring = new string(GlobalSetFrameDataStruct.Text.ToArray());
                         string mainuserstring = "";
                         string otheruserstring = "";
 
-                        war3inject.CallExport<SetFrameDataStruct>("UnrealLobbyHelper.res", "SetFrameDataText", GlobalSetFrameDataStruct);
-
-                        GlobalSetFrameDataStruct.FrameName = "RaceMenu";
+                        war3inject.CallExport<int>("UnrealLobbyHelper.res", "SetFrameDataText",0);
 
                         if (ICCUP_MODE)
                         {
-                            GlobalSetFrameDataStruct.Text = PlayerGeneralInfoString(ref CurrentPlayerData);
-                            mainuserstring = GlobalSetFrameDataStruct.Text;
-                            war3inject.CallExport<SetFrameDataStruct>("UnrealLobbyHelper.res", "SetFrameDataText", GlobalSetFrameDataStruct);
+                            AddrOffset = DllAddress + FrameNameOffset;
+                            war3mem.WriteStringWarcraft(AddrOffset, "RaceMenu");
+
+                            mainuserstring = PlayerGeneralInfoString(ref CurrentPlayerData);
+
+                            AddrOffset = DllAddress + FrameTextOffset;
+                            war3mem.WriteStringWarcraft(AddrOffset, mainuserstring);
+
+                            war3inject.CallExport<int>("UnrealLobbyHelper.res", "SetFrameDataText", 0);
                         }
 
                         string OtherInfo = PlayerOtherInfoString(CurrentPlayerData);
+
                         if (OtherInfo != string.Empty)
                         {
-                            GlobalSetFrameDataStruct.FrameName = "HandicapMenu";
                             otheruserstring = OtherInfo;
-                            GlobalSetFrameDataStruct.Text = OtherInfo;
-                            war3inject.CallExport<SetFrameDataStruct>("UnrealLobbyHelper.res", "SetFrameDataText", GlobalSetFrameDataStruct);
+                            AddrOffset = DllAddress + FrameNameOffset;
+                            war3mem.WriteStringWarcraft(AddrOffset, "HandicapMenu");
+
+                            AddrOffset = DllAddress + FrameTextOffset;
+                            war3mem.WriteStringWarcraft(AddrOffset, otheruserstring);
+
+                            war3inject.CallExport<int>("UnrealLobbyHelper.res", "SetFrameDataText", 0);
                         }
 
-                        UpdateFormPlayerInfo(i, usernamestring, mainuserstring, otheruserstring, CurrentPlayerData.banned);
+                        UpdateFormPlayerInfo(i, usernamestr, mainuserstring, otheruserstring, CurrentPlayerData.banned);
                         UpdatePlayerStructIfExist(CurrentPlayerData);
                     }
                 }

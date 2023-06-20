@@ -31,6 +31,7 @@ int IsGame()
 BOOL NeedEject = FALSE;
 
 
+
 class WarcraftFramesClass
 {
 
@@ -327,7 +328,6 @@ private:
 		GetFrameAddress = 0;
 		UpdateFrameTextSize = 0;
 		GameDll = 0;
-		laststringcmp = 0;
 		laststringcmp = false;
 		sizechanged = false;
 		lockedframe = false;
@@ -351,42 +351,6 @@ private:
 
 };
 
-struct SetFrameDataStruct
-{
-	char FrameName[200];
-	int FrameId;
-	char Text[512];
-	WarcraftFramesClass::FRAME_TYPE ftype;
-};
-
-DWORD __stdcall SetFrameDataText(SetFrameDataStruct* framedatatext)
-{
-	if (!IsGame())
-	{
-		try
-		{
-			WarcraftFramesClass tmpclass = WarcraftFramesClass(framedatatext->FrameName, framedatatext->FrameId, framedatatext->ftype);
-			WarcraftFramesClass tmpclass2 = WarcraftFramesClass("NameMenu", framedatatext->FrameId, WarcraftFramesClass::FRAME_MENU);
-			if (tmpclass.GetFrameAddr() > 0)
-			{
-				if (tmpclass2.GetFrameAddr() > 0)
-				{
-					if (tmpclass2.FrameGetText() != NULL)
-					{
-						tmpclass.WriteTextSafe(framedatatext->Text);
-					}
-				}
-			}
-		}
-		catch (...)
-		{
-
-		}
-	}
-	VirtualFree(framedatatext, sizeof(SetFrameDataStruct), MEM_RELEASE);
-	return 0;
-}
-
 
 struct PlayerDataStruct
 {
@@ -394,7 +358,44 @@ struct PlayerDataStruct
 	int playersdata[15];
 };
 
+
 PlayerDataStruct GlobalPlayerStruct;
+
+char GLOBAL_FrameName[200];
+char GLOBAL_Text[512];
+int GLOBAL_FrameId;
+WarcraftFramesClass::FRAME_TYPE GLOBAL_ftype;
+
+DWORD __stdcall SetFrameDataText(int)
+{
+	if (!IsGame())
+	{
+		try
+		{
+			WarcraftFramesClass * tmpclass = new WarcraftFramesClass(GLOBAL_FrameName, GLOBAL_FrameId, GLOBAL_ftype);
+			WarcraftFramesClass * tmpclass2 = new WarcraftFramesClass("NameMenu", GLOBAL_FrameId, WarcraftFramesClass::FRAME_MENU);
+			if (tmpclass->GetFrameAddr() > 0)
+			{
+				if (tmpclass2->GetFrameAddr() > 0)
+				{
+					if (tmpclass2->FrameGetText() != NULL)
+					{
+						tmpclass->WriteTextSafe(GLOBAL_Text);
+					}
+				}
+			}
+			delete tmpclass;
+			delete tmpclass2;
+		}
+		catch (...)
+		{
+
+		}
+	}
+	return 0;
+}
+
+
 
 DWORD __stdcall UpdatePlayerNames(LPVOID)
 {
@@ -446,7 +447,11 @@ BOOL __stdcall DllMain(HINSTANCE hDLL, unsigned int r, LPVOID)
 			fopen_s(&f, (detectorConfigPath + "printplayerinfo.txt").c_str(), "w");
 			if (f != NULL)
 			{
-				fprintf(f, "%X->%X", (int)&GlobalPlayerStruct.players - (int)hDLL, (int)&GlobalPlayerStruct - (int)hDLL);
+				fprintf(f, "%X->%X\n", (int)&GlobalPlayerStruct.players - (int)hDLL, (int)&GlobalPlayerStruct - (int)hDLL);
+				fprintf(f, "%X\n", (int)&GLOBAL_FrameName[0] - (int)hDLL);
+				fprintf(f, "%X\n", (int)&GLOBAL_ftype - (int)hDLL);
+				fprintf(f, "%X\n", (int)&GLOBAL_FrameId - (int)hDLL);
+				fprintf(f, "%X\n", (int)&GLOBAL_Text[0] - (int)hDLL);
 				fclose(f);
 			}
 		}
