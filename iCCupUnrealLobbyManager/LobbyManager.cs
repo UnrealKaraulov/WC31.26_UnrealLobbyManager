@@ -19,8 +19,6 @@ namespace UnrealLobbyManager
 {
     public partial class LobbyManager : Form
     {
-        string cachedir = ".\\cachedir";
-
         const string BanListFilePath = ".\\banlist.dat";
 
 
@@ -162,28 +160,6 @@ namespace UnrealLobbyManager
             if (Is3x3)
                 return "_______________[3x3].dat";
             return "_______________[5x5].dat";
-        }
-
-        void SavePlayerInfoStructToCache(PlayerInfoStruct str)
-        {
-            string FilePlayerInfoPath = cachedir + (ICCUP_MODE ? "_iccup" : "") + "\\" + str.PlayerName + BoolIs3x3(str.Is3x3);
-
-            if (File.Exists(FilePlayerInfoPath))
-                return;
-
-            File.Create(FilePlayerInfoPath).Close();
-            File.AppendAllText(FilePlayerInfoPath, str.PTS.ToString() + "\r\n");
-            File.AppendAllText(FilePlayerInfoPath, str.KDA.ToString() + "\r\n");
-            File.AppendAllText(FilePlayerInfoPath, str.WinRate.ToString() + "\r\n");
-            File.AppendAllText(FilePlayerInfoPath, str.Win.ToString() + "\r\n");
-            File.AppendAllText(FilePlayerInfoPath, str.Lose.ToString() + "\r\n");
-            File.AppendAllText(FilePlayerInfoPath, str.Leaves.ToString() + "\r\n");
-            File.AppendAllText(FilePlayerInfoPath, str.WinStreak.ToString() + "\r\n");
-            File.AppendAllText(FilePlayerInfoPath, str.CurStreak.ToString() + "\r\n");
-            if (str.allotherokay)
-            {
-                File.AppendAllText(FilePlayerInfoPath, str.flag.ToString() + "\r\n");
-            }
         }
 
         string DownloadUrl_ICCUP(string url, ref string resuri)
@@ -417,41 +393,12 @@ namespace UnrealLobbyManager
                 }
             }
 
-            string FilePlayerInfoPath = cachedir + (ICCUP_MODE ? "_iccup" : "") + "\\" + playername + BoolIs3x3(Is3x3);
-            TempPlayerInfoStruct.OldPlayerName = playername;
-            TempPlayerInfoStruct.PlayerName = playername;
-            TempPlayerInfoStruct.Is3x3 = Is3x3;
-
-            if (File.Exists(FilePlayerInfoPath))
+            if (ICCUP_MODE)
+                TempPlayerInfoStruct = LoadPlayerInfoStructFromIccup(playername, Is3x3);
+            if (TempPlayerInfoStruct.allokay || !ICCUP_MODE)
             {
-                string[] PlayerInfoFileData = File.ReadAllLines(FilePlayerInfoPath);
-                TempPlayerInfoStruct.PTS = int.Parse(PlayerInfoFileData[0]);
-                TempPlayerInfoStruct.KDA = int.Parse(PlayerInfoFileData[1]);
-                TempPlayerInfoStruct.WinRate = int.Parse(PlayerInfoFileData[2]);
-                TempPlayerInfoStruct.Win = int.Parse(PlayerInfoFileData[3]);
-                TempPlayerInfoStruct.Lose = int.Parse(PlayerInfoFileData[4]);
-                TempPlayerInfoStruct.Leaves = int.Parse(PlayerInfoFileData[5]);
-                TempPlayerInfoStruct.WinStreak = int.Parse(PlayerInfoFileData[6]);
-                TempPlayerInfoStruct.CurStreak = int.Parse(PlayerInfoFileData[7]);
-                TempPlayerInfoStruct.allokay = true;
-                if (PlayerInfoFileData.Length > 7)
-                {
-                    TempPlayerInfoStruct.flag = PlayerInfoFileData[8];
-                    TempPlayerInfoStruct.allotherokay = true;
-                }
                 AllPlayers.Add(TempPlayerInfoStruct);
             }
-            else
-            {
-                if (ICCUP_MODE)
-                    TempPlayerInfoStruct = LoadPlayerInfoStructFromIccup(playername, Is3x3);
-                if (TempPlayerInfoStruct.allokay || !ICCUP_MODE)
-                {
-                    SavePlayerInfoStructToCache(TempPlayerInfoStruct);
-                    AllPlayers.Add(TempPlayerInfoStruct);
-                }
-            }
-
             return TempPlayerInfoStruct;
         }
 
@@ -935,53 +882,7 @@ namespace UnrealLobbyManager
 
         private void LobbyManager_Load(object sender, EventArgs e)
         {
-            if (Directory.Exists(cachedir + "_iccup"))
-            {
-                foreach (string file in Directory.GetFiles(cachedir + "_iccup"))
-                {
-                    FileInfo fi = new FileInfo(file);
-                    if (fi.LastAccessTime < DateTime.Now.AddHours(-5))
-                        fi.Delete();
-                    else
-                    {
-                        PlayerInfoStruct TempPlayerInfoStruct = LoadPlayerInfoStructFromCache(file);
-                        if (!TempPlayerInfoStruct.allokay)
-                        {
-                            fi.Delete();
-                        }
-                        else
-                        {
-                            AllPlayers.Add(TempPlayerInfoStruct);
-                        }
-                    }
-                }
-            }
-            else
-                Directory.CreateDirectory(cachedir + "_iccup");
-
-            if (Directory.Exists(cachedir))
-            {
-                foreach (string file in Directory.GetFiles(cachedir))
-                {
-                    FileInfo fi = new FileInfo(file);
-                    if (fi.LastAccessTime < DateTime.Now.AddHours(-5))
-                        fi.Delete();
-                    else
-                    {
-                        PlayerInfoStruct TempPlayerInfoStruct = LoadPlayerInfoStructFromCache(file);
-                        if (!TempPlayerInfoStruct.allokay)
-                        {
-                            fi.Delete();
-                        }
-                        else
-                        {
-                            AllPlayers.Add(TempPlayerInfoStruct);
-                        }
-                    }
-                }
-            }
-            else
-                Directory.CreateDirectory(cachedir);
+          
 
             if (File.Exists(BanListFilePath))
             {
@@ -994,17 +895,6 @@ namespace UnrealLobbyManager
 
         private void CacheCleaner_Tick(object sender, EventArgs e)
         {
-            if (Directory.Exists(cachedir))
-            {
-                foreach (string file in Directory.GetFiles(cachedir))
-                {
-                    FileInfo fi = new FileInfo(file);
-                    if (fi.LastAccessTime < DateTime.Now.AddHours(-5))
-                        fi.Delete();
-                }
-            }
-            else
-                Directory.CreateDirectory(cachedir);
         }
 
 
