@@ -1,4 +1,4 @@
-# iCCupUnrealLobbyManager
+# War3LobbyManager
  
 Очередной старый проект ~10 лет назад делался. 
 
