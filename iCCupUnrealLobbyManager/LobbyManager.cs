@@ -194,7 +194,7 @@ namespace UnrealLobbyManager
         void FillGeneralPlayerInfo_ICCUP(ref PlayerInfoStruct str)
         {
             string regex1 = @"i-pts\"">(.*?)<.*?\""k-num\"">K\s+(.*?)<.*>(\d+)\s+\/\s+(\d+)\s+\/\s+(\d+)<.*<td>(\d+)<\/td>.*<td>(-?\d+)<\/td>.*?desktop-view";
-            string url1 = "https://iccup.com/dota/gamingprofile/" + Uri.EscapeUriString(str.PlayerName.ToLower());
+            string url1 = "https://iccup.com/dota/gamingprofile/" + Uri.EscapeUriString(str.PlayerName.ToLower()) + "/";
             string data = "";
             float waitcount = 1.0f;
             str.allokay = false;
@@ -268,7 +268,7 @@ namespace UnrealLobbyManager
 
             string regex1 = @"alt=\""(\w+)\""\s+class=\""user--flag\""";
 
-            string url1 = "https://iccup.com/dota/profile/view/" + str.PlayerName;
+            string url1 = "https://iccup.com/dota/profile/view/" + str.PlayerName + "/";
 
             float waitcount = 1.0f;
             string data = "";
@@ -515,7 +515,7 @@ namespace UnrealLobbyManager
                         playerinfo.ban_reason = playerinfo.ban_reason[playerinfo.ban_reason.Length - 1] + playerinfo.ban_reason;
                         playerinfo.ban_reason = playerinfo.ban_reason.Remove(playerinfo.ban_reason.Length - 1);
                     }
-                    result += "|c00FF4000" + playerinfo.ban_reason + "|r";
+                    result += "|c00FF4000" + playerinfo.ban_reason.Remove(8) + "|r";
                 }
                 else if (PlayerInfoStringTicks <= 60)
                 {
@@ -528,7 +528,7 @@ namespace UnrealLobbyManager
                         playerinfo.ban_reason = playerinfo.ban_reason[playerinfo.ban_reason.Length - 1] + playerinfo.ban_reason;
                         playerinfo.ban_reason = playerinfo.ban_reason.Remove(playerinfo.ban_reason.Length - 1);
                     }
-                    result += "|c00FF4000" + playerinfo.ban_reason + "|r";
+                    result += "|c00FF4000" + playerinfo.ban_reason.Remove(8) + "|r";
                 }
                 else if (PlayerInfoStringTicks <= 100)
                 {
@@ -541,7 +541,7 @@ namespace UnrealLobbyManager
                         playerinfo.ban_reason = playerinfo.ban_reason[playerinfo.ban_reason.Length - 1] + playerinfo.ban_reason;
                         playerinfo.ban_reason = playerinfo.ban_reason.Remove(playerinfo.ban_reason.Length - 1);
                     }
-                    result += "|c00FF4000" + playerinfo.ban_reason + "|r";
+                    result += "|c00FF4000" + playerinfo.ban_reason.Remove(8) + "|r";
                 }
                 else
                 {
@@ -772,11 +772,14 @@ namespace UnrealLobbyManager
                     PlayerInfoStringTicks++;
                     PlayerInfoStringTicks++;
 
+                    if (new Random().Next(0, 200) > 100)
+                        PlayerInfoStringTicks++;
+
                     for (int i = 0; i < 12; i++)
                     {
                         if (i >= PlayerCount)
                         {
-                            UpdateFormPlayerInfo(i, "Пусто", string.Empty, string.Empty,false);
+                            UpdateFormPlayerInfo(i, "Пусто", string.Empty, string.Empty, false);
                             continue;
                         }
 
@@ -839,7 +842,7 @@ namespace UnrealLobbyManager
                         string mainuserstring = "";
                         string otheruserstring = "";
 
-                        war3inject.CallExport<int>("UnrealLobbyHelper.res", "SetFrameDataText",0);
+                        war3inject.CallExport<int>("UnrealLobbyHelper.res", "SetFrameDataText", 0);
 
                         if (ICCUP_MODE)
                         {
@@ -882,7 +885,7 @@ namespace UnrealLobbyManager
 
         private void LobbyManager_Load(object sender, EventArgs e)
         {
-          
+
 
             if (File.Exists(BanListFilePath))
             {
