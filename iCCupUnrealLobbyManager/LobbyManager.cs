@@ -266,7 +266,7 @@ namespace UnrealLobbyManager
                 return;
             }
 
-            string regex1 = @"alt=\""(\w+)\""\s+class=\""user--flag\""";
+            string regex1 = @"profile-header.*?alt=\""(\w+)\""\s+class=\""user--flag\""";
 
             string url1 = "https://iccup.com/dota/profile/view/" + str.PlayerName + "/";
 
