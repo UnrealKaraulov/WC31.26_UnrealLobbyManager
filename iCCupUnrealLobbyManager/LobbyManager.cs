@@ -329,7 +329,7 @@ namespace UnrealLobbyManager
             try
             {
                 FillGeneralPlayerInfo_ICCUP(ref TempPlayerInfoStruct);
-                Thread.Sleep(50 + (new Random().Next(0, 100)));
+                Thread.Sleep(50 + (new Random().Next(25, 125)));
                 FillOtherPlayerInfo_ICCUP(ref TempPlayerInfoStruct);
                 Thread.Sleep(10);
                 if (!TempPlayerInfoStruct.allokay)
@@ -491,8 +491,7 @@ namespace UnrealLobbyManager
             }
             else
             {
-                PlayerInfoStringTicks = 0;
-                result += "|c00FF8000PTS : [ |r|c0000FFFF" + playerinfo.PTS + "|r|c00FF8000 ] |r";
+                result += "|c00FF8000PTS : [ |r|c0000FFFF" + playerinfo.PTS + "|r|c00FF8000 ] |c0020E000KDA : [ |r|c0000FFFF" + (playerinfo.KDA / 10.0f) + "|r|c0020E000 ] |r";
             }
 
             return result;
@@ -510,12 +509,12 @@ namespace UnrealLobbyManager
                 }
                 else if (PlayerInfoStringTicks <= 40)
                 {
-                    if (playerinfo.ban_reason.Length > 5)
+                    if (playerinfo.ban_reason.Length > 8)
                     {
-                        playerinfo.ban_reason = playerinfo.ban_reason[playerinfo.ban_reason.Length - 1] + playerinfo.ban_reason;
+                        playerinfo.ban_reason = playerinfo.ban_reason[playerinfo.ban_reason.Length - 1].ToString() + playerinfo.ban_reason;
                         playerinfo.ban_reason = playerinfo.ban_reason.Remove(playerinfo.ban_reason.Length - 1);
                     }
-                    result += "|c00FF4000" + playerinfo.ban_reason.Remove(8) + "|r";
+                    result += "|c00FF4000" + playerinfo.ban_reason + "|r";
                 }
                 else if (PlayerInfoStringTicks <= 60)
                 {
@@ -523,12 +522,12 @@ namespace UnrealLobbyManager
                 }
                 else if (PlayerInfoStringTicks <= 80)
                 {
-                    if (playerinfo.ban_reason.Length > 5)
+                    if (playerinfo.ban_reason.Length > 8)
                     {
-                        playerinfo.ban_reason = playerinfo.ban_reason[playerinfo.ban_reason.Length - 1] + playerinfo.ban_reason;
+                        playerinfo.ban_reason = playerinfo.ban_reason[playerinfo.ban_reason.Length - 1].ToString() + playerinfo.ban_reason;
                         playerinfo.ban_reason = playerinfo.ban_reason.Remove(playerinfo.ban_reason.Length - 1);
                     }
-                    result += "|c00FF4000" + playerinfo.ban_reason.Remove(8) + "|r";
+                    result += "|c00FF4000" + playerinfo.ban_reason + "|r";
                 }
                 else if (PlayerInfoStringTicks <= 100)
                 {
@@ -536,12 +535,12 @@ namespace UnrealLobbyManager
                 }
                 else if (PlayerInfoStringTicks <= 120)
                 {
-                    if (playerinfo.ban_reason.Length > 5)
+                    if (playerinfo.ban_reason.Length > 8)
                     {
-                        playerinfo.ban_reason = playerinfo.ban_reason[playerinfo.ban_reason.Length - 1] + playerinfo.ban_reason;
+                        playerinfo.ban_reason = playerinfo.ban_reason[playerinfo.ban_reason.Length - 1].ToString() + playerinfo.ban_reason;
                         playerinfo.ban_reason = playerinfo.ban_reason.Remove(playerinfo.ban_reason.Length - 1);
                     }
-                    result += "|c00FF4000" + playerinfo.ban_reason.Remove(8) + "|r";
+                    result += "|c00FF4000" + playerinfo.ban_reason + "|r";
                 }
                 else
                 {
@@ -683,6 +682,12 @@ namespace UnrealLobbyManager
             });
         }
 
+        bool NeedPrintToolName = false;
+        bool[] PrintStats = Enumerable.Repeat(false, 12).ToArray();
+
+
+        int PrintStatsTick = 0;
+
         private void DataFinder_Tick()
         {
             FirstFind = true;
@@ -757,9 +762,10 @@ namespace UnrealLobbyManager
                     }
 
                     int DllAddress = war3mem.DllImageAddress("UnrealLobbyHelper.res");
-                    int PlayersOffset = 0x36E60;
-                    int FrameNameOffset = 0x36EA0;
-                    int FrameTypeOffset = 0x36E5C;
+
+                    int PlayersOffset = 0x36E68;
+                    int FrameNameOffset = 0x36EA8;
+                    int FrameTypeOffset = 0x36E64;
                     int FrameIdOffset = 0x36C50;
                     int FrameTextOffset = 0x36C58;
 
@@ -768,6 +774,7 @@ namespace UnrealLobbyManager
                     int PlayerInfoAddr = DllAddress + PlayersOffset;
                     int PlayerCount = war3mem.ReadInt(PlayerInfoAddr);
 
+                    PrintStatsTick++;
 
                     PlayerInfoStringTicks++;
                     PlayerInfoStringTicks++;
@@ -775,10 +782,14 @@ namespace UnrealLobbyManager
                     if (new Random().Next(0, 200) > 100)
                         PlayerInfoStringTicks++;
 
+                    if ( PlayerInfoStringTicks > 120)
+                        PlayerInfoStringTicks = 0;
+
                     for (int i = 0; i < 12; i++)
                     {
                         if (i >= PlayerCount)
                         {
+                            PrintStats[i] = false;
                             UpdateFormPlayerInfo(i, "Пусто", string.Empty, string.Empty, false);
                             continue;
                         }
@@ -786,12 +797,14 @@ namespace UnrealLobbyManager
                         int PlayerNameOffset = war3mem.ReadInt(PlayerInfoAddr + 4 + 4 * i);
                         if (PlayerNameOffset < 1)
                         {
+                            PrintStats[i] = false;
                             UpdateFormPlayerInfo(i, "Пусто", string.Empty, string.Empty, false);
                             continue;
                         }
                         PlayerNameOffset = war3mem.ReadInt(PlayerNameOffset);
                         if (PlayerNameOffset < 1)
                         {
+                            PrintStats[i] = false;
                             UpdateFormPlayerInfo(i, "Пусто", string.Empty, string.Empty, false);
                             continue;
                         }
@@ -802,11 +815,13 @@ namespace UnrealLobbyManager
 
                         if (PlayerName.Length == 0)
                         {
+                            PrintStats[i] = false;
                             UpdateFormPlayerInfo(i, "Пусто", string.Empty, string.Empty, false);
                             continue;
                         }
                         if (PlayerName.Length > 15 || PlayerName.Length < 2)
                         {
+                            PrintStats[i] = false;
                             UpdateFormPlayerInfo(i, "Пусто", string.Empty, string.Empty, false);
                             continue;
                         }
@@ -815,6 +830,7 @@ namespace UnrealLobbyManager
 
                         if (!CurrentPlayerData.allokay)
                         {
+                            PrintStats[i] = false;
                             UpdateFormPlayerInfo(i, "Нет данных", string.Empty, string.Empty, false);
                             AddToBlackList(PlayerName.ToLower());
                             continue;
@@ -873,6 +889,38 @@ namespace UnrealLobbyManager
 
                         UpdateFormPlayerInfo(i, usernamestr, mainuserstring, otheruserstring, CurrentPlayerData.banned);
                         UpdatePlayerStructIfExist(CurrentPlayerData);
+
+
+                        if (PrintStatsTick > 6)
+                        {
+                            if (NeedPrintToolName)
+                            {
+                                PrintStatsTick = 4;
+                                NeedPrintToolName = false;
+                                war3mem.WriteStringWarcraft(AddrOffset, " [ UnrealLobbyManager ] https://github.com/UnrealKaraulov/WC31.26_UnrealLobbyManager ");
+
+                                war3inject.CallExport<int>("UnrealLobbyHelper.res", "SendStringToAll", 0);
+                            }
+                            else if (PrintStats[i])
+                            {
+                                PrintStats[i] = false;
+                                AddrOffset = DllAddress + FrameTextOffset;
+
+                                string printstats =
+                                    "[ " + PlayerName + " ] : " +
+                                    "PTS [ " + CurrentPlayerData.PTS + " ] " +
+                                    "KDA [ " + (CurrentPlayerData.KDA / 10.0f) + " ] " +
+                                    "WINRATE [ " + CurrentPlayerData.WinRate + " ] " +
+                                    "LEAVES [ " + CurrentPlayerData.Leaves + " ] " +
+                                    "FLAG [ " + CurrentPlayerData.flag + " ] ";
+
+                                war3mem.WriteStringWarcraft(AddrOffset, printstats);
+
+                                war3inject.CallExport<int>("UnrealLobbyHelper.res", "SendStringToAll", 0);
+                                PrintStatsTick = 0;
+                            }
+                        }
+
                     }
                 }
                 catch
@@ -935,6 +983,9 @@ namespace UnrealLobbyManager
                     CommandLineText.Text = "/unban ";
                     break;
                 case 2:
+                    CommandLineText.Text = "/printstats";
+                    break;
+                case 3:
                     CommandLineText.Text = "/exit";
                     break;
                 default:
@@ -969,6 +1020,11 @@ namespace UnrealLobbyManager
                     string username = CommandLineText.Text.Replace("/unban ", "");
                     DelFromBanList(username);
                     RefreshBanList();
+                }
+                else if (CommandLineText.Text.ToLower().IndexOf("/printstats") >= 0)
+                {
+                    PrintStats = Enumerable.Repeat(true, 12).ToArray();
+                    NeedPrintToolName = true;
                 }
                 else if (CommandLineText.Text.ToLower().IndexOf("/exit") >= 0)
                 {

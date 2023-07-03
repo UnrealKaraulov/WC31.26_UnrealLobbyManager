@@ -98,6 +98,7 @@
             this.ActivateOtherInfo.TabIndex = 14;
             this.ActivateOtherInfo.Text = "Получать дополнительную инфу (флаг, сезоны, скайп)";
             this.ActivateOtherInfo.UseVisualStyleBackColor = true;
+            this.ActivateOtherInfo.Visible = false;
             // 
             // CacheCleaner
             // 
@@ -141,6 +142,7 @@
             this.comboBox1.Items.AddRange(new object[] {
             "/ban username reason",
             "/unban username",
+            "/printstats",
             "/exit"});
             this.comboBox1.Location = new System.Drawing.Point(530, 377);
             this.comboBox1.Name = "comboBox1";

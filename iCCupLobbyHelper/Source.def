@@ -7,3 +7,4 @@ GLOBAL_FrameName
 GLOBAL_Text
 GLOBAL_FrameId
 GLOBAL_ftype
+SendStringToAll

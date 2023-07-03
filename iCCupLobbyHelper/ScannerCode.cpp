@@ -366,26 +366,37 @@ char GLOBAL_Text[512];
 int GLOBAL_FrameId;
 WarcraftFramesClass::FRAME_TYPE GLOBAL_ftype;
 
+DWORD LastFrameMissingTime = 0;
+
 DWORD __stdcall SetFrameDataText(int)
 {
 	if (!IsGame())
 	{
 		try
 		{
-			WarcraftFramesClass * tmpclass = new WarcraftFramesClass(GLOBAL_FrameName, GLOBAL_FrameId, GLOBAL_ftype);
-			WarcraftFramesClass * tmpclass2 = new WarcraftFramesClass("NameMenu", GLOBAL_FrameId, WarcraftFramesClass::FRAME_MENU);
+			WarcraftFramesClass* tmpclass3 = new WarcraftFramesClass("NameMenu", 0, WarcraftFramesClass::FRAME_MENU);
+			WarcraftFramesClass* tmpclass = new WarcraftFramesClass(GLOBAL_FrameName, GLOBAL_FrameId, GLOBAL_ftype);
+			WarcraftFramesClass* tmpclass2 = new WarcraftFramesClass("NameMenu", GLOBAL_FrameId, WarcraftFramesClass::FRAME_MENU);
 			if (tmpclass->GetFrameAddr() > 0)
 			{
 				if (tmpclass2->GetFrameAddr() > 0)
 				{
 					if (tmpclass2->FrameGetText() != NULL)
 					{
-						tmpclass->WriteTextSafe(GLOBAL_Text);
+						if (GetTickCount() - LastFrameMissingTime > 1500)
+							tmpclass->WriteTextSafe(GLOBAL_Text);
 					}
 				}
 			}
+
+			if (!tmpclass3)
+			{
+				LastFrameMissingTime = GetTickCount();
+			}
+
 			delete tmpclass;
 			delete tmpclass2;
+			delete tmpclass3;
 		}
 		catch (...)
 		{
@@ -396,6 +407,274 @@ DWORD __stdcall SetFrameDataText(int)
 }
 
 
+
+//
+//unsigned char* GetBnetChatSock()
+//{
+//	int netaddr = sub_6F53E6B0();
+//	int bnetChat = GetBnetSockStr(GameDll + 0xAD0090, 0, netaddr, 0, &netaddr, 0, 1);
+//	if (bnetChat > 0)
+//	{
+//		return *(unsigned char**)(bnetChat + 0x414);
+//	}
+//	return 0;
+//}
+//
+
+unsigned char* GetHostBotChatSock()
+{
+	int hostbotsock = *(int*)(GameDll + 0xACFFA4);
+	if (hostbotsock > 0)
+	{
+		hostbotsock = *(int*)(hostbotsock + 0x148);
+		if (hostbotsock > 0)
+		{
+			return *(unsigned char**)(hostbotsock + 0x3C);
+		}
+	}
+	return 0;
+}
+typedef void(__fastcall* GAME_SendPacketDir_p) (unsigned char* tcpoffs, unsigned char* zero, unsigned char* packetData, int len);
+GAME_SendPacketDir_p GAME_SendPacketDir;
+
+void SendData(unsigned char* sockstr, unsigned char header, unsigned char packetid, unsigned char* data, int datalen)
+{
+	if (!sockstr)
+		return;
+
+	std::vector<unsigned char> send_data_buf;
+	short totallen = datalen + 4;
+	send_data_buf.push_back(header);
+	send_data_buf.push_back(packetid);
+	send_data_buf.push_back(((unsigned char*)&totallen)[0]);
+	send_data_buf.push_back(((unsigned char*)&totallen)[1]);
+
+	for (int i = 0; i < datalen; i++)
+	{
+		send_data_buf.push_back(data[i]);
+	}
+
+	if (sockstr && *(int*)sockstr > 0 && *(int*)(*(int*)sockstr + 44) > 0)
+		GAME_SendPacketDir(sockstr, 0, &send_data_buf[0], (int)send_data_buf.size());
+}
+
+unsigned char GetLocalPid()
+{
+	int hostbotsock = *(int*)(GameDll + 0xACFFA4);
+	if (hostbotsock > 0)
+	{
+		hostbotsock = *(int*)(hostbotsock + 0x148);
+		if (hostbotsock > 0)
+		{
+			return *(unsigned char*)(hostbotsock + 0xB4);
+		}
+	}
+	return 0;
+}
+
+void SendMapSize(unsigned char flags, unsigned int mapsize)
+{
+	unsigned char* hostbotsocket = GetHostBotChatSock();
+	if (hostbotsocket)
+	{
+		std::vector<unsigned char> senddata;
+		senddata.push_back(((unsigned char*)&mapsize)[0]);
+		senddata.push_back(((unsigned char*)&mapsize)[1]);
+		senddata.push_back(((unsigned char*)&mapsize)[2]);
+		senddata.push_back(((unsigned char*)&mapsize)[3]);
+		senddata.push_back(flags);
+		senddata.push_back(((unsigned char*)&mapsize)[0]);
+		senddata.push_back(((unsigned char*)&mapsize)[1]);
+		senddata.push_back(((unsigned char*)&mapsize)[2]);
+		senddata.push_back(((unsigned char*)&mapsize)[3]);
+		SendData(hostbotsocket, 0xF7, 0x3F, &senddata[0], (int)senddata.size());
+	}
+}
+
+void StartPongToPing()
+{
+	unsigned char* hostbotsocket = GetHostBotChatSock();
+	if (hostbotsocket)
+	{
+		unsigned int data = rand();
+		std::vector<unsigned char> senddata;
+		senddata.push_back(((unsigned char*)&data)[0]);
+		senddata.push_back(((unsigned char*)&data)[1]);
+		senddata.push_back(((unsigned char*)&data)[2]);
+		senddata.push_back(((unsigned char*)&data)[3]);
+		SendData(hostbotsocket, 0xF7, 0x46, &senddata[0], (int)senddata.size());
+	}
+}
+
+void StartMapDownload()
+{
+	unsigned char* hostbotsocket = GetHostBotChatSock();
+	if (hostbotsocket)
+	{
+		std::vector<unsigned char> senddata;
+		SendData(hostbotsocket, 0xF7, 0x3F, &senddata[0], (int)senddata.size());
+	}
+}
+
+void SendGproxyReconnect()
+{
+	unsigned char* hostbotsocket = GetHostBotChatSock();
+	if (hostbotsocket)
+	{
+		std::vector<unsigned char> senddata;
+		SendData(hostbotsocket, 0xF8, 1, &senddata[0], (int)senddata.size());
+	}
+}
+
+void StopMapDownload()
+{
+	unsigned char* hostbotsocket = GetHostBotChatSock();
+	if (hostbotsocket)
+	{
+		std::vector<unsigned char> senddata;
+		SendData(hostbotsocket, 0xF7, 0x23, &senddata[0], (int)senddata.size());
+	}
+}
+
+void ChangeHandicap(unsigned char percent)
+{
+	unsigned char* hostbotsocket = GetHostBotChatSock();
+	if (hostbotsocket)
+	{
+		std::vector<unsigned char> senddata;
+		senddata.push_back(16);
+		// msg and flags
+		for (int i = 0; i < 16; i++)
+		{
+			senddata.push_back(i);
+		}
+		senddata.push_back(GetLocalPid());
+		senddata.push_back(0x14);
+		// percent
+		senddata.push_back(percent);
+		SendData(hostbotsocket, 0xF7, 0x28, &senddata[0], (int)senddata.size());
+	}
+}
+
+
+void ChangeTeam(unsigned char team)
+{
+	unsigned char* hostbotsocket = GetHostBotChatSock();
+	if (hostbotsocket)
+	{
+		//F728090001FF021100
+		std::vector<unsigned char> senddata;
+		senddata.push_back(16);
+		// msg and flags
+		for (int i = 0; i < 16; i++)
+		{
+			senddata.push_back(i);
+		}
+		senddata.push_back(GetLocalPid());
+		senddata.push_back(0x11);
+		// team
+		senddata.push_back(team);
+		SendData(hostbotsocket, 0xF7, 0x28, &senddata[0], (int)senddata.size());
+	}
+}
+
+void ChangeColour(unsigned char color)
+{
+	unsigned char* hostbotsocket = GetHostBotChatSock();
+	if (hostbotsocket)
+	{
+		std::vector<unsigned char> senddata;
+		senddata.push_back(16);
+		// msg and flags
+		for (int i = 0; i < 16; i++)
+		{
+			senddata.push_back(i);
+		}
+		senddata.push_back(GetLocalPid());
+		senddata.push_back(0x12);
+		// color
+		senddata.push_back(color);
+		SendData(hostbotsocket, 0xF7, 0x28, &senddata[0], (int)senddata.size());
+	}
+}
+
+void ChangeExtraFlags(unsigned int flags, std::string msg)
+{
+	unsigned char* hostbotsocket = GetHostBotChatSock();
+	if (hostbotsocket)
+	{
+		std::vector<unsigned char> senddata;
+		senddata.push_back(16);
+		// msg and flags
+		for (int i = 0; i < 16; i++)
+		{
+			senddata.push_back(i);
+		}
+		senddata.push_back(GetLocalPid());
+		senddata.push_back(0x12);
+		// flags
+		senddata.push_back(((unsigned char*)&flags)[0]);
+		senddata.push_back(((unsigned char*)&flags)[1]);
+		senddata.push_back(((unsigned char*)&flags)[2]);
+		senddata.push_back(((unsigned char*)&flags)[3]);
+		for (auto& c : msg)
+			senddata.push_back(c);
+		senddata.push_back(0x00);
+
+
+		SendData(hostbotsocket, 0xF7, 0x28, &senddata[0], (int)senddata.size());
+	}
+}
+// sub_6F676C70 (sock?, packid, playerid, toplayeridoffset, toplayeridsize, packeddata, packetsize);
+void SendChatMessageBot(const std::string& msg)
+{
+	unsigned char* hostbotsocket = GetHostBotChatSock();
+	if (hostbotsocket)
+	{
+		std::vector<unsigned char> senddata;
+		senddata.push_back(16);
+		// msg and flags
+		for (int i = 0; i < 16; i++)
+		{
+			senddata.push_back(i);
+		}
+		senddata.push_back(GetLocalPid());
+
+		senddata.push_back(0x10);
+
+	/*	senddata.push_back(3);
+		senddata.push_back(3);
+		senddata.push_back(3);
+		senddata.push_back(3);*/
+
+		// msg
+		for (auto& c : msg)
+			senddata.push_back(c);
+		senddata.push_back(0x00);
+
+		SendData(hostbotsocket, 0xF7, 0x28, &senddata[0], (int)senddata.size());
+
+		//senddata.clear();
+		//senddata.push_back(0x01);
+		//// msg and flags
+		//senddata.push_back(0x02);
+		//senddata.push_back(0x01);
+		//senddata.push_back(0x10);
+		//// msg
+		//for (auto& c : msg)
+		//	senddata.push_back(c);
+		//senddata.push_back(0x00);
+
+		//SendData(hostbotsocket, 0xF7, 0x0F, &senddata[0], (int)senddata.size());
+	}
+}
+
+
+DWORD __stdcall SendStringToAll(int)
+{
+	SendChatMessageBot(GLOBAL_Text);
+	return 0;
+}
 
 DWORD __stdcall UpdatePlayerNames(LPVOID)
 {
@@ -436,12 +715,15 @@ BOOL __stdcall DllMain(HINSTANCE hDLL, unsigned int r, LPVOID)
 		{
 			return FALSE;
 		}
+
+		GAME_SendPacketDir = (GAME_SendPacketDir_p)(GameDll + 0x6DF040);
+
 		char fullPath[1024];
 		GetModuleFileNameA(hDLL, fullPath, 1024);
 
 		std::string detectorConfigPath = std::filesystem::path(fullPath).remove_filename().string();
 
-		if (FileExist(detectorConfigPath+"printplayerinfo.txt"))
+		if (FileExist(detectorConfigPath + "printplayerinfo.txt"))
 		{
 			FILE* f = NULL;
 			fopen_s(&f, (detectorConfigPath + "printplayerinfo.txt").c_str(), "w");
